@@ -4,7 +4,6 @@ from mongo_initialization import MongoConnection
 from qdrant_initialization import QdrantConnect
 
 
-
 def data_fetch_pipeline(concepts = None, country = "United States", maxItems = 1):
 
     mongo_connect = MongoConnection()
