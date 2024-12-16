@@ -249,12 +249,15 @@ class MongoUpdates:
         
         update_keyword_scores(user_id, articles, feedback)
 
-obj = MongoUpdates()
-articles_details = [
-    ('675ac0b610a4574847b8f347', 3, 1, 0, 277),
-    ('675ac0b610a4574847b8f346', 10, 1, 0, 1005)
-]
-user = '675baa4fb49e0719e0ac4bf3'
-# obj.update_user_history(articles_details, user)
-# obj.update_keyword_read_time(articles_details)
-obj.update_user_keyword_score(articles_details, user)
+    def close_connection(self):
+        self.mongo.close()
+
+# obj = MongoUpdates()
+# articles_details = [
+#     ('675ac0b610a4574847b8f347', 3, 1, 0, 277),
+#     ('675ac0b610a4574847b8f346', 10, 1, 0, 1005)
+# ]
+# user = '675baa4fb49e0719e0ac4bf3'
+# # obj.update_user_history(articles_details, user)
+# # obj.update_keyword_read_time(articles_details)
+# obj.update_user_keyword_score(articles_details, user)
