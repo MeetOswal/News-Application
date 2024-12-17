@@ -29,7 +29,7 @@ class Model:
     def transform(self, raw_data, article_collection):
         for row in raw_data:
             if article_collection.find_one({'uri' : row['uri']}) is None:
-                self.data['article'].append(row['url'])
+                self.data['article'].append(row['body'])
                 self.data['date'].append(datetime.strptime(row['date'], "%Y-%m-%d").date())
                 self.data['url'].append(row['url'])
                 self.data['title'].append(row['title'])
@@ -47,7 +47,6 @@ class Model:
                             if concept['score'] >= 3:
                                 concepts.append(concept['label']['eng'])           
                 self.data['concepts'].append(concepts)
-
         self.dataset = Dataset.from_dict(self.data)
     
     def summarize(self):
@@ -65,7 +64,7 @@ class Model:
             chunks = split_text_into_chunks(article, 728)
             summaries = []
             for chunk in chunks:
-                summary = self.summarizer(chunk, max_length= 64, do_sample=False)
+                summary = self.summarizer(chunk, max_length= 140, do_sample=False)
                 summaries.append(summary[0]['summary_text'])
 
             final_summary = " ".join(summaries)
@@ -113,23 +112,27 @@ class Model:
                 })
             documents.append(document)
         try:
-            inserted_documents = articles_col.insert_many(documents, ordered=False)
-            inserted_ids = inserted_documents.inserted_ids
-            query = {'_id': {'$in': inserted_ids}}
-            projection = {'_id': 1, 'embedding': 1, 'date' : 1}   
-            self.retrieved_documents = articles_col.find(query, projection)
-            keywords_col.insert_many(keywords, ordered=False)
-            
+            if len(documents) > 0:
+                inserted_documents = articles_col.insert_many(documents, ordered=False)
+                inserted_ids = inserted_documents.inserted_ids
+                query = {'_id': {'$in': inserted_ids}}
+                projection = {'_id': 1, 'embedding': 1, 'date' : 1}   
+                self.retrieved_documents = articles_col.find(query, projection)
+                keywords_col.insert_many(keywords, ordered=False)
+
         except BulkWriteError as bwe:
             print(f'Documents Already present')
-
+        
     def insert_to_qdrant(self, client, collection_name):
         try:
             data_points = [PointStruct(id= str(uuid.uuid4()), vector= value['embedding'][0], payload= { "_id" : str(value['_id']), "date" : int(value['date'].timestamp())}) for value in self.retrieved_documents]
-            _ = client.upsert(
-                collection_name = collection_name,
-                wait = True,
-                points = data_points
-            )
+            if len(data_points) > 0:
+                _ = client.upsert(
+                    collection_name = collection_name,
+                    wait = True,
+                    points = data_points
+                )
+            else:
+                print("No Data to Send")
         except Exception as e:
-            print('e')
+            print('No Document to Send - exception')

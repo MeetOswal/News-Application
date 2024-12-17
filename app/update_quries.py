@@ -10,6 +10,7 @@ class MongoUpdates:
         self.article_collection = self.mongo.get_collection('articles')
         self.keywords_collection = self.mongo.get_collection('keywords')
 
+    # internal function 
     def calcuate_user_feedback(self, articles_details, w1 = 0.3, w2 = 0.25, w3 = 0.45):
             result = []
             for article, read_time, reaction, clicked_url, length in articles_details:            
@@ -65,6 +66,15 @@ class MongoUpdates:
             'date' : datetime.now()
             } for i in result]
         
+        self.user_collection.update_one(
+            {"_id": ObjectId(user_id)},
+            {
+                "$pull": {
+                    "userHistory": {"$in": history_push}  # Remove items already in history_push
+                }
+            }
+        )
+
         self.user_collection.update_one({
             "_id" : ObjectId(user_id)
         },{

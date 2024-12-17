@@ -30,6 +30,6 @@ def data_fetch_pipeline(concepts = None, country = "United States", maxItems = 1
     llm.summarize()
     print("Summaries Generated...")
     llm.insert_to_mongo(keywords_collection, articles_collection)
-    llm.insert_to_qdrant(qdrant_connect.getClient(), 'bigData')
+    llm.insert_to_qdrant(qdrant_connect.getClient(), 'bigData_collection')
     print("Data Stored...")
     mongo_connect.close()

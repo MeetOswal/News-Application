@@ -19,7 +19,7 @@ class Recommendation:
     def clean_list(self):
         self.final_candidate_list = []
 
-    def keyword_based_recommendation(self, user_id):
+    def keyword_based_recommendation(self, user_id, prev_rec):
         pipeline = [
             { 
                 '$match': { '_id': ObjectId(user_id) }
@@ -30,7 +30,7 @@ class Recommendation:
                         '$slice': [{ '$sortArray': { 'input': '$userSelectedPreferences', 'sortBy': { 'score': -1 } } }, 10]
                     },
                     'hiddenPreferences': {
-                        '$slice': [{ '$sortArray': { 'input': '$hiddenPreferences', 'sortBy': { 'score': -1 } } }, 10]
+                        '$slice': [{ '$sortArray': { 'input': '$hiddenPreferences', 'sortBy': { 'score': -1 } } }, 10 * min(1+prev_rec, 3)]
                     }
                 }
             }
@@ -46,11 +46,12 @@ class Recommendation:
             'keywords': {'$in': top_user_keyword_list}
         }
 
-        mongo_get_articles = self.article_collection.find(mongo_query).sort('date', -1).limit(30)
+        mongo_get_articles = self.article_collection.find(mongo_query).sort('date', -1).skip((prev_rec // 2) * 10).limit(30 + (prev_rec) * 10)
 
         self.final_candidate_list.extend([article['_id'] for article in mongo_get_articles])
 
-    def vector_database_recommendation(self, user_id):
+    def vector_database_recommendation(self, user_id, prev_rec):
+
         def find_recency_score_for_user(user_id, decay_rate = -0.15, limit = 10):
             pipeline_exponential_deacy = [{
                     "$match": {
@@ -101,7 +102,7 @@ class Recommendation:
                     "sortBy": { "score": -1 },  # Sort by 'score' in descending order
                     }
                     },
-                    limit # limit the output
+                    limit + (min(prev_rec, 3) * 10) # limit the output
                 ]        
                 }
             }
@@ -127,7 +128,8 @@ class Recommendation:
                 search_results = self.qdrant_client.search(
                     collection_name="bigData_collection",
                     query_vector=embedding,
-                    limit=10,
+                    limit=10 + (prev_rec * 10),
+                    offset= (prev_rec // 2) * 10,
                     query_filter = Filter(
                         must = [
                             FieldCondition(
@@ -145,17 +147,18 @@ class Recommendation:
             articles = [ObjectId(article) for article, _ in recommendations]
             self.final_candidate_list.extend(articles[:30])
 
-    def user_vector_recommendation(self, user_id):
+    def user_vector_recommendation(self, user_id, prev_rec):
         user = next(iter(self.user_collection.find({'_id' : ObjectId(user_id)})))
         search_results = self.qdrant_client.search(
             collection_name="bigData_collection",
             query_vector= user['userVector'][0],
-            limit= 30
+            limit= 30 + (prev_rec * 10),
+            offset= (prev_rec // 2) * 10
         )
         recommendations = [ObjectId(article.payload['_id']) for article in search_results]
         self.final_candidate_list.extend(recommendations)
     
-    def popular_keywords_news_recommendation(self):
+    def popular_keywords_news_recommendation(self, prev_rec):
         yesterday = datetime.combine(datetime.now().date(), datetime.min.time()) - timedelta(days=1)
 
         pipeline = [
@@ -168,7 +171,7 @@ class Recommendation:
                 "total_score": {"$sum": "$last_24_hours.score"}
             }},
             {"$sort": {"total_score": -1}},
-            {"$limit": 10}
+            {"$limit": 10 + (min(prev_rec, 5) * 5)}
         ]
         recommendation_keywords = self.keywords_collection.aggregate(pipeline)
         recommendation_keywords = [keyword['_id'] for keyword in recommendation_keywords]
@@ -176,11 +179,12 @@ class Recommendation:
         mongo_query = {
             'keywords': {'$in': recommendation_keywords}
         }
-        mongo_get_articles = self.article_collection.find(mongo_query).sort('date', -1).limit(30)
+        mongo_get_articles = self.article_collection.find(mongo_query).sort('date', -1).skip((prev_rec // 2) * 10).limit(30 + (prev_rec * 10))
         articles = [article['_id'] for article in mongo_get_articles]
 
         self.final_candidate_list.extend(articles)
     
+    # internal code
     def find_recency_score_for_articles(self, articles, decay_rate = -0.15):
         pipeline_exponential_deacy = [
             {
@@ -214,9 +218,9 @@ class Recommendation:
         ]
         return self.article_collection.aggregate(pipeline_exponential_deacy)  
 
-    def re_rank(self, user_id):
+    def re_rank(self, user_id, prev_rec):
         recommendations = list(set(self.final_candidate_list))
-        user_data = self.user_collection.find_one({"_id": ObjectId(user_id)}, {"userHistory": {"$slice": -10}, "_id": 0})
+        user_data = self.user_collection.find_one({"_id": ObjectId(user_id)}, {"userHistory": {"$slice": -(10 + prev_rec)}, "_id": 0})
         user_history = [article['article_id'] for article in user_data['userHistory']]
 
         user_embeddings = []
@@ -244,17 +248,25 @@ class Recommendation:
         rec_scores = {}
         for idx in recency_scores:
             rec_scores[idx['_id']] = idx['recency_score']
-        
+
         final_scores = {}
         for idx, doc_id in enumerate(recommendations):
             cosine_score = average_similarity_scores[idx] # if idx < len(average_similarity_scores) else 0
             r_score= rec_scores[ObjectId(doc_id)]
             if cosine_score > 0: final_scores[doc_id] = r_score / cosine_score
         
-        top_recommendations = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)[:10]
+        top_recommendations = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
+        if len(top_recommendations) > 20 and top_recommendations[19][1] <= 0.4:
+            prev_rec = -(prev_rec + 1)
+        elif len(top_recommendations) < 20 and top_recommendations[-1][1] <= 0.4:
+            prev_rec = -(prev_rec + 1)
+        elif len(top_recommendations) < 20:
+            prev_rec += 1
+
+        top_recommendations = top_recommendations[:10]
+        top_recommendations = self.article_collection.find({"_id" : { "$in" : [idx[0] for idx in top_recommendations]}}, {"_id" : 0, "title" : 1, "summary" : 1})
         self.clean_list()
-        self.mongo.close()
-        return top_recommendations
+        return (top_recommendations, prev_rec)
         
     
 
