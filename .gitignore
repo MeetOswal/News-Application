@@ -2,3 +2,11 @@
 /output.json
 /schema.json
 /kafka
+/app/__pycache__
+/app/kakfa.txt
+/app/celerybeat-schedule.bak
+/app/celerybeat-schedule.dat
+/app/celerybeat-schedule.dir
+
+
+
