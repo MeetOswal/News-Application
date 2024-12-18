@@ -264,7 +264,7 @@ class Recommendation:
             prev_rec += 1
 
         top_recommendations = top_recommendations[:10]
-        top_recommendations = self.article_collection.find({"_id" : { "$in" : [idx[0] for idx in top_recommendations]}}, {"_id" : 0, "title" : 1, "summary" : 1})
+        top_recommendations = self.article_collection.find({"_id" : { "$in" : [idx[0] for idx in top_recommendations]}}, {"title" : 1, "summary" : 1, "url" : 1})
         self.clean_list()
         return (top_recommendations, prev_rec)
         
