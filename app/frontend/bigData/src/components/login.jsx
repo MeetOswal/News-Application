@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {useNavigate } from "react-router-dom";
 import axios from "axios";
 import API from "../assets/api"
+import "../css/LoginPage.css";
 function LoginPage() {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
@@ -26,6 +27,7 @@ function LoginPage() {
                 withCredentials: true, 
             });
             setLoggedIn(true)
+            sessionStorage.clear();
         } catch (error) {
             console.log(error);
             (error.response) ? setError(error.response.data.error) : setError("error")
@@ -35,10 +37,10 @@ function LoginPage() {
     }
 
     return (
-        <div>
+        <div className="login-container">
             {
                 !loggedIn ? (
-                    <form onSubmit={handleSubmit}>
+                    <form onSubmit={handleSubmit} className="login-form">
                         <label htmlFor="email">Email</label>
                         <input type="text" 
                         value = {email}
@@ -51,25 +53,27 @@ function LoginPage() {
                         onChange={(e) => setPassword(e.target.value)}
                         required/>
                         <br />
-                        {loading ? (
-                            <button type="Submit" disabled = {true}>Submitting...</button>
-                        ):(
-                            <button type="Submit" disabled = {false}>Sumbit</button>
-                        )}
-                        
-                        <br />
-                        <button onClick={(e) => nav("/register")}>Register</button>
+                        <div className="button-container">
+                            {loading ? (
+                                <button type="Submit" disabled = {true} className="primary-button loading">Submitting...</button>
+                            ):(
+                                <button type="Submit" disabled = {false} className="primary-button">Sumbit</button>
+                            )}
+                            
+                            <br />
+                            <button className="secondary-button" onClick={(e) => nav("/register")}>Register</button>
+                        </div>
                     </form>
                 ) : (
-                    <div>
+                    <div className="success-message">
                         <span>Login Succesfull</span>
-                        <button onClick={() => nav("/", {state : true})}>Home</button>
+                        <button className="primary-button" onClick={() => nav("/", {state : true})}>Home</button>
                     </div>
                 )
             }
             {
                 error && (
-                    <div>{error}</div>
+                    <div className="error-message">{error}</div>
                 )
             }
         </div>

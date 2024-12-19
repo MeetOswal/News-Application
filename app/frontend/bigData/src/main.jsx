@@ -4,6 +4,8 @@ import { RouterProvider, createBrowserRouter } from "react-router-dom";
 import App from './App';
 import LoginPage from './components/login';
 import CreateUser from './components/createUser';
+import AddKeywords from './components/addKeywords';
+import Search from './components/search';
 const router = createBrowserRouter([
   {
     path: "/",
@@ -16,6 +18,13 @@ const router = createBrowserRouter([
   {
     path : "/register",
     element : <CreateUser />
+  },{
+    path: "keyword-search",
+    element : <AddKeywords />
+  },
+  {
+    path : "/search",
+    element : <Search />
   }
 ]);
 

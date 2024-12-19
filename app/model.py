@@ -1,8 +1,74 @@
 from transformers import pipeline, BartTokenizer, BartModel, logging
+from transformers import BartForConditionalGeneration
+import numpy as np
+from bson import ObjectId
+
+class Model:
+    def search(self, client, collection, query):
+        # Load the tokenizer and model
+        tokenizer = BartTokenizer.from_pretrained("facebook/bart-large-cnn")
+        model = BartForConditionalGeneration.from_pretrained("facebook/bart-large-cnn").to("cuda")
+
+        # Helper function to generate embeddings for the query
+        def embed_query(query):
+            tokens = tokenizer(query, return_tensors='pt', truncation=True, padding=True, max_length=1024)
+            tokens = {key: value.to('cuda') for key, value in tokens.items()}
+            with torch.no_grad():
+                outputs = model.model.encoder(**tokens)
+            embeddings = outputs.last_hidden_state
+            query_vector = embeddings.mean(dim=1).detach().cpu().numpy()
+            return query_vector
+
+        # Generate query embeddings
+        query_embedding = embed_query(query).flatten()
+
+        # Search in Qdrant vector database
+        search_results = client.search(
+            collection_name="bigData_collection",
+            query_vector=query_embedding.tolist(),
+            limit=5  # Fetch top 5 documents
+        )
+
+        # Extract document IDs from the search results
+        document_ids = [result.payload["_id"] for result in search_results]
+
+        # Query MongoDB for documents corresponding to the IDs
+        documents = list(collection.find(
+            {"_id": {"$in": [ObjectId(doc_id) for doc_id in document_ids]}},
+            {"_id": 1, "summary": 1, "url": 1}
+        ))
+
+        # Check if documents are found
+        if not documents:
+            return "No relevant documents found for your query."
+
+        # Extract summaries and URLs from the documents
+        summaries = [doc["summary"] for doc in documents if "summary" in doc]
+        urls = [doc["url"] for doc in documents if "url" in doc]
+
+        # Combine the summaries into a single context
+        combined_summaries = " ".join(summaries)
+
+        # Generate a response using the BART model
+        input_text = f"Query: {query}\nContext: {combined_summaries}"
+        input_tokens = tokenizer(input_text, return_tensors="pt", truncation=True, max_length=1024).to("cuda")
+        
+        with torch.no_grad():
+            generated_ids = model.generate(input_tokens["input_ids"], max_length=200, num_beams=4, early_stopping=True)
+        
+        response_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+
+        # Append URLs to the response
+        url_texts = [f"[For More Information, Click here]({url})" for url in urls]
+        final_response = response_text + "\n\n" + "\n".join(url_texts)
+
+        return final_response
+
 from qdrant_client.http.models import PointStruct
 from pymongo.errors import BulkWriteError
 from datasets import Dataset
 from datetime import datetime
+from bson import ObjectId
 import torch
 import uuid
 
@@ -136,3 +202,63 @@ class Model:
                 print("No Data to Send")
         except Exception as e:
             print('No Document to Send - exception')
+
+    def search(self, client, collection, query):
+        # Load the tokenizer and model
+        tokenizer = BartTokenizer.from_pretrained("facebook/bart-large-cnn")
+        model = BartForConditionalGeneration.from_pretrained("facebook/bart-large-cnn").to("cuda")
+
+        # Helper function to generate embeddings for the query
+        def embed_query(query):
+            tokens = tokenizer(query, return_tensors='pt', truncation=True, padding=True, max_length=1024)
+            tokens = {key: value.to('cuda') for key, value in tokens.items()}
+            with torch.no_grad():
+                outputs = model.model.encoder(**tokens)
+            embeddings = outputs.last_hidden_state
+            query_vector = embeddings.mean(dim=1).detach().cpu().numpy()
+            return query_vector
+
+        # Generate query embeddings
+        query_embedding = embed_query(query).flatten()
+
+        # Search in Qdrant vector database
+        search_results = client.search(
+            collection_name="bigData_collection",
+            query_vector=query_embedding.tolist(),
+            limit=5  # Fetch top 5 documents
+        )
+
+        # Extract document IDs from the search results
+        document_ids = [result.payload["_id"] for result in search_results]
+
+        # Query MongoDB for documents corresponding to the IDs
+        documents = list(collection.find(
+            {"_id": {"$in": [ObjectId(doc_id) for doc_id in document_ids]}},
+            {"_id": 1, "summary": 1, "url": 1}
+        ))
+
+        # Check if documents are found
+        if not documents:
+            return "No relevant documents found for your query."
+
+        # Extract summaries and URLs from the documents
+        summaries = [doc["summary"] for doc in documents if "summary" in doc]
+        urls = [doc["url"] for doc in documents if "url" in doc]
+
+        # Combine the summaries into a single context
+        combined_summaries = " ".join(summaries)
+
+        # Generate a response using the BART model
+        input_text = f"Query: {query}\nContext: {combined_summaries}"
+        input_tokens = tokenizer(input_text, return_tensors="pt", truncation=True, max_length=1024).to("cuda")
+        
+        with torch.no_grad():
+            generated_ids = model.generate(input_tokens["input_ids"], max_length=200, num_beams=4, early_stopping=True)
+        
+        response_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+
+        # Append URLs to the response
+        url_texts = [f"[For More Information, Click here]({url})" for url in urls]
+        final_response = response_text + "\n\n" + "\n".join(url_texts)
+
+        return final_response

@@ -9,6 +9,8 @@ import bcrypt
 from datetime import datetime, timedelta
 from bson import ObjectId
 import numpy as np
+from model import Model
+from qdrant_initialization import QdrantConnect
 from flask_cors import CORS
 
 
@@ -129,13 +131,15 @@ def update_preferences():
     user_collection = mongo.get_collection('user')
 
     preferences = request.form.get('preferences')
-    print(preferences)
     preference_object = [{'keyword' : pref, "score" : 0.5} for pref in preferences.split(",")]
+
 
     user_collection.update_one(
         {'_id': ObjectId(session['user_id'])},
         {
-            "$push" : {"userSelectedPreferences" : {"$each": preference_object }}
+           "$addToSet": {
+            "userSelectedPreferences": {"$each": preference_object}
+        }
         }
     )
     mongo.close()
@@ -200,14 +204,46 @@ def get_popular_keywords():
     mongo.close()
     return jsonify({"message" : recommendation_keywords}), 200
 
-@app.route('/update-user-activity/', methods = ['POST'])
-def update_user_activity(user_id):
+@app.route('/update-user-activity', methods = ['POST'])
+def update_user_activity():
     if "user_id" in session:
         user_id = session['user_id']
-        update_user_history.apply_async(request.form.get('activity'), user_id)
-        update_user_keyword_score.apply_async(request.form.get('activity'), user_id)
-        update_keyword_read_time.apply_async(request.form.get('activity'))
+        array_of_objects = eval(request.form.get('activity'))
+        result = []
+        for object in array_of_objects:
+            x = [object['article'], object['readTime'], object['reaction'], object['clickedUrl'], object['length']]
+            result.append(tuple(x))
+
+        update_user_history.apply_async(args=[result, user_id])
+        update_user_keyword_score.apply_async(args=[result, user_id])
+        update_keyword_read_time.apply_async(args = [result])
+    return jsonify({"message" : "OK"}), 200
+
+@app.route("/search", methods=['GET'])
+def search():
+    mongo = MongoConnection()
+    model = Model()
+    collection = mongo.get_collection('articles')
+    client = QdrantConnect()
+    
+    try:
+        # Get the query from the request
+        query = request.args.get('query')
+        
+        # Perform the search and get the response
+        response = model.search(client.getClient(), collection, query)
+        
+        mongo.close()  # Close MongoDB connection
+        return jsonify({"response": response}), 200
+    
+    except Exception as e:
+        mongo.close()  # Ensure MongoDB connection is closed in case of errors
+        return jsonify({"error": str(e)}), 500
+
+
+
+
 
 if __name__ == "__main__":
     # app.run(host='0.0.0.0', port=5000, debug = True)
-    app.run(port=3000, debug = True)
+    app.run(port=5000, debug = True)
