@@ -44,7 +44,8 @@ conda activate <env_name>
 
 Start Kafka in the project directory. Ensure Kafka is configured and running correctly:
 ```bash
-<command to start Kafka>
+.\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties
+.\bin\windows\kafka-server-start.bat .\config\server.properties
 ```
 ### Step 3: Start the Flask Server
 
