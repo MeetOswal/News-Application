@@ -4,8 +4,8 @@ from qdrant_client.http.models import Distance, VectorParams
 class QdrantConnect:
     def __init__(self):
         self.client = QdrantClient(
-            url="https://ebc8b276-71dc-4b06-9303-2ced3445a1ec.us-east4-0.gcp.cloud.qdrant.io:6333", 
-            api_key="5oIorWxl94DrfMOzfZzrK9xkM5sGQ_1FohJWCqBFZI-NWqXX2-LDJQ",
+            url="<QDRANT Connection URL>", 
+            api_key="<Qdrnat Connection API Key>",
         )
     
     def create_collection(self, name, embedding_size = 1024):

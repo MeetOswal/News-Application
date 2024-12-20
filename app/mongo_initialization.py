@@ -2,7 +2,7 @@ from pymongo import MongoClient
 
 class MongoConnection:
     def __init__(self):
-        connection_string = "mongodb+srv://meetoswal:2912@cluster0.i9o30.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+        connection_string = "<Mongo Connection URL>"
         self.client = MongoClient(connection_string)
         self.db = self.client['bigData']
         self.collection = None

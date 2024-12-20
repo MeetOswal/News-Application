@@ -2,7 +2,7 @@ from eventregistry import EventRegistry, QueryArticlesIter, ReturnInfo, ArticleI
 
 class APISource:
     def __init__(self):
-        self.er = EventRegistry(apiKey = '6cd604c0-d47e-4c71-bebf-5278c667c7ac')
+        self.er = EventRegistry(apiKey = '<API Key>')
         self.events_result = []
         self.concepts = [] 
         self.result = []
