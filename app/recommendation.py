@@ -20,6 +20,20 @@ class Recommendation:
         self.final_candidate_list = []
 
     def keyword_based_recommendation(self, user_id, prev_rec):
+        """
+        Generates keyword-based news recommendations for a given user.
+
+        Args:
+            user_id (str): The ObjectId of the user in string format.
+            prev_rec (int): The number of times recommendations have been previously made to the user.
+                            Used to diversify and paginate the results.
+
+        Workflow:
+            1. Fetch top user-selected and hidden preferences (keywords) from the user profile.
+            2. Construct a query to find articles containing any of these top keywords.
+            3. Sort articles by recency and paginate results based on how many times recommendations were previously shown.
+            4. Extend the candidate list with new article ObjectIds.
+        """
         pipeline = [
             { 
                 '$match': { '_id': ObjectId(user_id) }
@@ -51,8 +65,29 @@ class Recommendation:
         self.final_candidate_list.extend([article['_id'] for article in mongo_get_articles])
 
     def vector_database_recommendation(self, user_id, prev_rec):
+        """
+        Generates a list of recommended articles for a user by combining recency-weighted feedback scores 
+        from MongoDB with embedding-based similarity search using Qdrant.
 
+        Parameters:
+            user_id (str): The user's unique identifier.
+            prev_rec (int): Number of previously shown recommendations (for pagination/offset logic).
+
+        Returns:
+            None (updates self.final_candidate_list with up to 30 recommended articles).
+        """
         def find_recency_score_for_user(user_id, decay_rate = -0.15, limit = 10):
+            """
+            Calculates exponentially decayed recency scores for a user's feedback history using MongoDB aggregation.
+
+            Parameters:
+                user_id (str): The user's ID.
+                decay_rate (float): The exponential decay rate applied to the feedback score based on date difference.
+                limit (int): Number of top-scoring items to retrieve.
+
+            Returns:
+                List[dict]: List of article_id and their corresponding decayed score.
+            """
             pipeline_exponential_deacy = [{
                     "$match": {
                         "_id": ObjectId(user_id) 
@@ -126,7 +161,7 @@ class Recommendation:
             for article in articles_data: 
                 embedding = article['embedding'][0]
                 search_results = self.qdrant_client.search(
-                    collection_name="bigData_collection",
+                    collection_name="news-collection",
                     query_vector=embedding,
                     limit=10 + (prev_rec * 10),
                     offset= (prev_rec // 2) * 10,
@@ -148,9 +183,20 @@ class Recommendation:
             self.final_candidate_list.extend(articles[:30])
 
     def user_vector_recommendation(self, user_id, prev_rec):
+        """
+        Generates article recommendations for a user by performing a similarity search using 
+        the user's aggregated vector representation.
+
+        Parameters:
+            user_id (str): The user's unique identifier.
+            prev_rec (int): Number of previously shown recommendations (used to set limit and offset).
+
+        Returns:
+            None (appends ObjectId of recommended articles to self.final_candidate_list).
+        """
         user = next(iter(self.user_collection.find({'_id' : ObjectId(user_id)})))
         search_results = self.qdrant_client.search(
-            collection_name="bigData_collection",
+            collection_name="news-collection",
             query_vector= user['userVector'][0],
             limit= 30 + (prev_rec * 10),
             offset= (prev_rec // 2) * 10
@@ -159,6 +205,15 @@ class Recommendation:
         self.final_candidate_list.extend(recommendations)
     
     def popular_keywords_news_recommendation(self, prev_rec):
+        """
+        Recommends news articles based on the most popular keywords from the past 24 hours.
+
+        Parameters:
+            prev_rec (int): Number of previously shown recommendations (used to adjust limits and skip for pagination).
+
+        Returns:
+            None (appends ObjectId of recommended articles to self.final_candidate_list).
+        """
         yesterday = datetime.combine(datetime.now().date(), datetime.min.time()) - timedelta(days=1)
 
         pipeline = [
@@ -186,6 +241,16 @@ class Recommendation:
     
     # internal code
     def find_recency_score_for_articles(self, articles, decay_rate = -0.15):
+        """
+        Calculates a recency score for a list of articles based on an exponential decay function.
+
+        Parameters:
+            articles (list[ObjectId]): List of article IDs to score.
+            decay_rate (float): Negative decay rate applied to the time difference (default: -0.15).
+
+        Returns:
+            pymongo.command_cursor.CommandCursor: Iterable containing dictionaries with `_id` and computed `recency_score`.
+        """
         pipeline_exponential_deacy = [
             {
                 "$match" : {
@@ -219,6 +284,16 @@ class Recommendation:
         return self.article_collection.aggregate(pipeline_exponential_deacy)  
 
     def re_rank(self, user_id, prev_rec):
+        """
+        Re-ranks the list of recommended articles based on cosine similarity with the user's history and recency scores.
+
+        Parameters:
+            user_id (str): The ID of the user to get personalized recommendations for.
+            prev_rec (int): The number of previous recommendations to adjust for.
+
+        Returns:
+            tuple: A tuple containing the top 10 recommended articles and the updated prev_rec value.
+        """
         recommendations = list(set(self.final_candidate_list))
         user_data = self.user_collection.find_one({"_id": ObjectId(user_id)}, {"userHistory": {"$slice": -(10 + prev_rec)}, "_id": 0})
         user_history = [article['article_id'] for article in user_data['userHistory']]

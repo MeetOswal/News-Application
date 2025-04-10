@@ -1,8 +1,10 @@
 from pymongo import MongoClient
-
+import os
+from dotenv import load_dotenv
 class MongoConnection:
     def __init__(self):
-        connection_string = "<Mongo Connection URL>"
+        load_dotenv()
+        connection_string = os.getenv("MONGO_URI")
         self.client = MongoClient(connection_string)
         self.db = self.client['bigData']
         self.collection = None

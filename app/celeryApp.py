@@ -14,7 +14,7 @@ celery.conf.broker_connection_retry_on_startup = True
 celery.config_from_object(__name__)
 
 celery.conf.beat_schedule = {
-    'run-every-5-minute' : {
+    'run-every-5-hours' : {
         'task' : 'celeryApp.fetch_data',
         'schedule' : crontab(minute=0, hour= "*/5")
     }
@@ -55,8 +55,8 @@ def fetch_keyword_data(user_id):
         top_user_keyword_list.extend([idx['keyword'] for idx in doc['userSelectedPreferences']])
         top_user_keyword_list.extend([idx['keyword'] for idx in doc['hiddenPreferences']])
     
-    # data_fetch_pipeline(concepts = top_user_keyword_list)
-    print("got user data")
+    data_fetch_pipeline(concepts = top_user_keyword_list)
+    # print("got user data")
 
 @celery.task
 def update_user_history(articles_details, user_id):

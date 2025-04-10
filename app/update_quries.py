@@ -5,6 +5,9 @@ import numpy as np
 
 class MongoUpdates:
     def __init__(self) -> None:
+        """
+        Initializes the Mongo connection and fetches relevant collections.
+        """
         self.mongo = MongoConnection()
         self.user_collection = self.mongo.get_collection('user')
         self.article_collection = self.mongo.get_collection('articles')
@@ -12,6 +15,24 @@ class MongoUpdates:
 
     # internal function 
     def calcuate_user_feedback(self, articles_details, w1 = 0.35, w2 = 0.20, w3 = 0.45):
+            """
+            Computes a feedback score for each article based on:
+            - read_time
+            - reaction
+            - URL clicks
+
+            Mathematical Formulation:
+            Let:
+            - Rᵢ = normalized read time score ∈ [-1, 1]
+            - Eᵢ = reaction score ∈ [-1, 1]
+            - Cᵢ = url click (1 or 0)
+
+            Then the feedback score Sᵢ is:
+            Sᵢ = w1·Rᵢ + w2·Eᵢ + w3·Cᵢ
+
+            Parameters:
+            - w1, w2, w3: weights for each feedback metric.
+            """
             result = []
             for article, read_time, reaction, clicked_url, length in articles_details:            
 
@@ -41,8 +62,20 @@ class MongoUpdates:
             return result
     
     def update_user_history(self, articles_details, user_id):
+        """
+        Updates the user’s embedding vector and reading history based on new article feedback.
+        Uses incremental update with weighted feedback.
+        """
 
         def update_user_embeddings(user_embeddings, article_embeddings, feedback_score, alpha = 0.1):
+            """
+            Formula:  
+            U' = (1 - α) * U + α * Aᵢ * scoreᵢ  
+            where:
+            - U: current user vector
+            - Aᵢ: article embedding
+            - scoreᵢ: feedback score
+            """
             user_embeddings = np.array(user_embeddings)
             for article, embedding  in article_embeddings:
                 adjusted_article_embedding = np.array(embedding) * feedback_score[article]
@@ -85,7 +118,13 @@ class MongoUpdates:
         })
 
     def update_keyword_read_time(self, articles_details):
+        """
+        Updates hourly read time aggregation for keywords from articles read.
 
+        Update:
+        - `last_24_hours.{hour}.date` = current date (normalized to 00:00)
+        - `last_24_hours.{hour}.score` += read_time
+        """
         for article, read_time, _, _, _ in articles_details:
             result = self.article_collection.find_one({"_id" : ObjectId(article)}, {"keywords" : 1})
             current_time = datetime.now().hour
@@ -103,7 +142,14 @@ class MongoUpdates:
                 })
 
     def update_user_keyword_score(self, articles_details, user_id):
-
+        """
+        Updates hidden/user-selected keyword scores based on recent feedback.
+        - Adds new unseen keywords to hiddenPreferences.
+        - Updates scores using linear update rule:
+        
+        Formula:
+        S_new = S_old + α * f
+        """
         feedback = self.calcuate_user_feedback(articles_details)
         articles = [idx['article_id'] for idx in feedback]
         feedback = [idx['feedback_score'] for idx in feedback]
@@ -129,6 +175,10 @@ class MongoUpdates:
             return normalized_score
         
         def update_user_hidden_keywords(user_id, keywords):
+            """
+            Adds new keywords to hiddenPreferences if not already present in userSelectedPreferences or hiddenPreferences.
+            Initializes score to 0.5
+            """
             self.user_collection.update_one(
                 { "_id": ObjectId(user_id) },  # Match the user document by their userId
                 [

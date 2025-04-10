@@ -2,6 +2,10 @@ from eventregistry import EventRegistry, QueryArticlesIter, ReturnInfo, ArticleI
 
 class APISource:
     def __init__(self):
+        """
+        Initializes the EventRegistry object and prepares containers to store events,
+        concepts (topics), article results, and a set to track article URIs.
+        """
         self.er = EventRegistry(apiKey = '<API Key>')
         self.events_result = []
         self.concepts = [] 
@@ -9,6 +13,16 @@ class APISource:
         self.result_uri = set()
 
     def get_events(self, country= "United States"):
+        """
+        Fetches events from a specified country using EventRegistry API.
+
+        Parameters:
+        - country (str): Name of the country to fetch events for. Defaults to 'United States'.
+
+        This method performs two separate queries:
+        1. Events sorted by date (latest events)
+        2. Events sorted by social score (most popular events)
+        """
         country = country.replace(" ", "_")
         print(country)
         q = QueryEventsIter(
@@ -23,6 +37,15 @@ class APISource:
             self.events_result.append(events)
     
     def set_concepts(self, concepts = []):
+        """
+        Sets or extracts high-relevance concepts from the fetched events.
+
+        Parameters:
+        - concepts (list): Optional manual list of concept names.
+
+        If no manual list is provided, the method automatically extracts concepts 
+        from the fetched events with a score > 50.
+        """
 
         if len(concepts) > 0:
             self.concepts = concepts
@@ -40,7 +63,17 @@ class APISource:
             return None
     
     def fetch_articles(self, max_concept = 15, country = "United States", maxItems = 1):
+        """
+        Fetches news articles related to the identified concepts from a specific country.
 
+        Parameters:
+        - max_concept (int): Number of concepts to use per query batch.
+        - country (str): Country to restrict the source location of articles.
+        - maxItems (int): Max articles to retrieve per query.
+
+        This method builds batches of concept URIs and queries EventRegistry for
+        relevant articles.
+        """
         for idxs in range(0 , len(self.concepts), max_concept): 
     
             chunk = [f'http://en.wikipedia.org/wiki/{self.concepts[i].replace(" ", "_")}' for i in range(idxs, min(len(self.concepts), idxs + max_concept))]
@@ -66,6 +99,12 @@ class APISource:
                     self.result_uri.add(article['uri'])
 
     def get_articles(self):
+        """
+        Yields each unique article fetched.
+
+        Returns:
+        - Generator yielding one article dictionary at a time.
+        """
         for article in self.result:
             yield article
 

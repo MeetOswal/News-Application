@@ -23,7 +23,7 @@ def data_fetch_pipeline(concepts = None, country = "United States", maxItems = 1
     _ = api.fetch_articles() # maxItems Argument, country Arguemnt
     source = api.get_articles()
 
-    print("data sourced...")
+    # print("data sourced...")
 
     llm = Model()
     llm.transform(source, articles_collection)

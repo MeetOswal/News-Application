@@ -1,11 +1,13 @@
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
-
+import os
+from dotenv import load_dotenv
 class QdrantConnect:
     def __init__(self):
+        load_dotenv()
         self.client = QdrantClient(
-            url="<QDRANT Connection URL>", 
-            api_key="<Qdrnat Connection API Key>",
+            url=os.getenv("QDRANT_URI"), 
+            api_key=os.getenv("QDRANT_KEY"),
         )
     
     def create_collection(self, name, embedding_size = 1024):
